@@ -1,8 +1,6 @@
 #include <cmath>
 #include "ap_int.h"
 #include "ap_fixed.h"
-#include "hls_half.h"
-#include "hls_math.h"
 
 // Bit depth of input coordinates
 #define BITD 10

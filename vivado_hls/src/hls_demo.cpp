@@ -1,5 +1,7 @@
 #include "hls_demo.hpp"
 #include <iostream>
+#include "hls_math.h"
+#include "hls_dsp.h"
 
 void hls_demo(in_cartesian_t input, output_struct& output)
 {
@@ -70,16 +72,20 @@ void to_polar_impl_cordic(in_cartesian_t input, out_polar_t& output) {
 
 void to_polar_impl_hlsmath(in_cartesian_t input, out_polar_t& output) {
 #pragma HLS INLINE off
-  assert( BITD<(10+1) ); // mantissa of half-precision = 10 bits
+  hls::sqrt_input<BITD*2+1, hls::CORDIC_FORMAT_USIG_INT>::in r2;
+  r2.in = input.x*input.x + input.y*input.y;
+  hls::sqrt_output<BITD+1, hls::CORDIC_FORMAT_USIG_INT>::out r;
+  hls::sqrt<hls::CORDIC_FORMAT_USIG_INT, BITD*2+1, BITD+1, hls::CORDIC_ROUND_TRUNCATE>(r2, r);
+  output.r = r.out;
 
-  float x_fp = static_cast<float>(input.x);
-  float y_fp = static_cast<float>(input.y);
-
-  float r_fp = hls::sqrtf( x_fp*x_fp + y_fp*y_fp );
-  float phi_fp = hls::atan2f(y_fp, x_fp);
-
-  output.r = static_cast<ap_int<BITD+1> >(r_fp);
-  output.phi = static_cast<ap_fixed<BITD, 2> >(phi_fp);
+  hls::atan2_input<BITD>::cartesian xy;
+  // inputs expected to be on complex unit square, convert to ap_fixed<BITD, 2>
+  xy.cartesian.real() = input.x * ap_ufixed<BITD-2, 0>(pow(2, 2-BITD));
+  xy.cartesian.imag() = input.y * ap_ufixed<BITD-2, 0>(pow(2, 2-BITD));
+  // std::cout << "Starting hls::atan2, x: " << xy.cartesian.real() << ", y: " << xy.cartesian.imag() << std::endl;
+  hls::atan2_output<BITD>::phase phi;
+  hls::atan2<hls::CORDIC_FORMAT_RAD, BITD, BITD, hls::CORDIC_ROUND_TRUNCATE>(xy, phi);
+  output.phi = phi.phase;
 }
 
 void to_polar_impl_fapprox(in_cartesian_t input, out_polar_t& output) {
