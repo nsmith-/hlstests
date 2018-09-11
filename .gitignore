@@ -1,0 +1,8 @@
+# Exclude build directory
+build/
+
+# Exclude Vivado journal files
+*.jou
+
+# Exclude Vivado log files
+*.log
