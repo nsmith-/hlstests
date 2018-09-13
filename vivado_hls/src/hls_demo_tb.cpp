@@ -1,36 +1,47 @@
-#include <cstdio>
+#include <iostream>
 #include <cstdlib>
-#include "hls_demo.hpp"
+#include "hls_demo.h"
 
 int main(void)
 {
   std::srand(42);
 
-  in_cartesian_t val;
-  output_struct output;
+  cand_in input[2];
+  lorentz output;
   
-  for(size_t i=0; i<100; ++i) {
-    uint32_t rnd = std::rand();
-    val.x = rnd & ((1<<BITD)-1);
-    val.y = (rnd>>BITD) & ((1<<BITD)-1);
-    std::printf("In: x=% 4d y=% 4d\n", static_cast<int>(val.x), static_cast<int>(val.y));
+  for(size_t i=0; i<10; ++i) {
+    input[0].pt = std::rand() & (64-1);
+    input[0].eta = lorentz::eta_t(std::rand()*6./RAND_MAX-3.);
+    input[0].phi = lorentz::phi_t(M_PI*std::rand()*1.98/RAND_MAX-M_PI);
 
-    double x = val.x;
-    double y = val.y;
-    double r = std::sqrt(x*x+y*y);
-    double phi = std::atan2(y, x);
-    std::printf("  Out FP     : r=% 6.1f phi=% 1.4f\n", r, phi);
+    input[1].pt = std::rand() & (64-1);
+    input[1].eta = lorentz::eta_t(std::rand()*4./RAND_MAX-2.);
+    input[1].phi = lorentz::phi_t(M_PI*std::rand()*1.98/RAND_MAX-M_PI);
 
-    hls_demo(val, output);
-    double r_cordic = static_cast<double>(output.cordic.r);
-    double phi_cordic = static_cast<double>(output.cordic.phi);
-    std::printf("  Out cordic : r=% 4.0f delta/LSB=% 3.1f,  phi=% 1.4f delta/LSB=% 3.1f\n", r_cordic, (r_cordic-r), phi_cordic, (phi_cordic-phi)/pow(2, -BITD+3));
-    double r_hlsmath = static_cast<double>(output.hlsmath.r);
-    double phi_hlsmath = static_cast<double>(output.hlsmath.phi);
-    std::printf("  Out hlsmath: r=% 4.0f delta/LSB=% 3.1f,  phi=% 1.4f delta/LSB=% 3.1f\n", r_hlsmath, (r_hlsmath-r), phi_hlsmath, (phi_hlsmath-phi)/pow(2, -BITD+3));
-    double r_lorentz = static_cast<double>(output.lorentz.r);
-    double phi_lorentz = static_cast<double>(output.lorentz.phi);
-    std::printf("  Out lorentz: r=% 4.0f delta/LSB=% 3.1f,  phi=% 1.4f delta/LSB=% 3.1f\n", r_lorentz, (r_lorentz-r), phi_lorentz, (phi_lorentz-phi)/pow(2, -BITD+3));
+    std::cout << "input 0 pt=" << input[0].pt << ", eta=" << input[0].eta << ", phi=" << input[0].phi << std::endl;
+    std::cout << "input 1 pt=" << input[1].pt << ", eta=" << input[1].eta << ", phi=" << input[1].phi << std::endl;
+
+    hls_demo(input, output);
+
+    std::cout << "output " << output << std::endl;
+
+    double px0 = (double) input[0].pt * cos((double) input[0].phi);
+    double py0 = (double) input[0].pt * sin((double) input[0].phi);
+    double pz0 = (double) input[0].pt * sinh((double) input[0].eta);
+    double E0  = (double) input[0].pt * cosh((double) input[0].eta);
+
+    double px1 = (double) input[1].pt * cos((double) input[1].phi);
+    double py1 = (double) input[1].pt * sin((double) input[1].phi);
+    double pz1 = (double) input[1].pt * sinh((double) input[1].eta);
+    double E1  = (double) input[1].pt * cosh((double) input[1].eta);
+    
+    double lsb = pow(2, lorentz::xyzt_t::iwidth-lorentz::xyzt_t::width);
+    double d_px = ((double) output.x_ - (px0 + px1)) / lsb;
+    double d_py = ((double) output.y_ - (py0 + py1)) / lsb;
+    double d_pz = ((double) output.z_ - (pz0 + pz1)) / lsb;
+    double d_E = ((double) output.t_ - (E0 + E1)) / lsb;
+
+    std::cout << "Delta (/LSB) x: " << d_px << ", y: " << d_py << ", z: " << d_pz << ", t: " << d_E << std::endl;
   }
 
   std::printf("Test passed!\n");

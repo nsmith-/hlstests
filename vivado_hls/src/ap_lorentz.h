@@ -1,48 +1,29 @@
 #ifndef AP_LORENTZ_H
 #define AP_LORENTZ_H
 
+#include <ostream>
 #include "ap_fixed.h"
 // BitWidth and Power template classes
 #include "hls/utils/x_hls_utils.h"
+#include "lorentz_tables.h"
 
-const double ap_lorentz_cordic_angles[16] = {
-  // python
-  // >> import math
-  // >> [math.atan(pow(2, -x-1)) for x in range(16)]
-  0.46364760900080615, 0.24497866312686414, 0.12435499454676144, 0.06241880999595735, 0.031239833430268277, 0.015623728620476831, 0.007812341060101111, 0.0039062301319669718, 0.0019531225164788188, 0.0009765621895593195, 0.0004882812111948983, 0.00024414062014936177, 0.00012207031189367021, 6.103515617420877e-05, 3.0517578115526096e-05, 1.5258789061315762e-05
-};
-const double ap_lorentz_cordic_scales[16] = {
-  // python
-  // >> from operator import mul
-  // >> a = [pow(1+pow(2, -2*(x+1)), -.5) for x in range(16)]
-  // >> [reduce(mul, a[:n+1]) for n in range(16)]
-  0.8944271909999159, 0.8677218312746247, 0.8610211763152799, 0.8593444051498349, 0.8589251104651273, 0.8588202804030459, 0.8587940724877404, 0.8587875204839219, 0.8587858824814052, 0.8587854729806784, 0.8587853706054906, 0.8587853450116933, 0.858785338613244, 0.8587853370136317, 0.8587853366137286, 0.8587853365137528
-};
-const double ap_lorentz_cordic_angles_hyp[16] = {
-  // python
-  // >> import math
-  // >> [math.atanh(pow(2, -x-1)) for x in range(16)]
-  0.5493061443340549, 0.2554128118829953, 0.12565721414045306, 0.06258157147700301, 0.03126017849066699, 0.01562627175205221, 0.007812658951540421, 0.003906269868396826, 0.0019531274835325498, 0.000976562810441036, 0.0004882812888051128, 0.0002441406298506386, 0.00012207031310632982, 6.103515632579122e-05, 3.05175781344739e-05, 1.5258789063684237e-05
-};
-const double ap_lorentz_cordic_scales_hyp[16] = {
-  // python
-  // >> from operator import mul
-  // >> a = [pow(1-pow(2, -2*(x+1)), -.5) for x in range(16)]
-  // >> [reduce(mul, a[:n+1]) for n in range(16)]
-  1.1547005383792515, 1.1925695879998877, 1.2019971622805568, 1.204351713336805, 1.2049402067573813, 1.205087321122957, 1.205124099153, 1.205133293625434, 1.2051355922413503, 1.2051361668951923, 1.2051363105586443, 1.2051363464745068, 1.2051363554534724, 1.2051363576982137, 1.205136358259399, 1.2051363583996955
-};
 
 // T must be ap_fixed type
 template<typename T>
 class ap_lorentz {
 public:
-typedef T xyzt_t;
+  typedef T xyzt_t;
   // 3-magnitude at most sqrt(3) larger than max xyzt_t
   typedef ap_fixed<xyzt_t::width+1, xyzt_t::width+1> mag_t;
+  // eta range: [-8, 8)
   typedef ap_fixed<xyzt_t::width, 4> eta_t;
+  // phi range: [-4, 4) (obviously |phi|<pi in reality)
   typedef ap_fixed<xyzt_t::width, 3> phi_t;
 
   xyzt_t x_, y_, z_, t_;
+
+  // Default
+  ap_lorentz() : x_(0.), y_(0.), z_(0.), t_(0.) {};
 
   // Construct from cartesian
   // (x,y,z,t) or (px, py, pz, E)
@@ -66,7 +47,7 @@ typedef T xyzt_t;
     polar_to_cart(pt, phi, x_, y_);
     xyzt_t mag;
     hyperb_to_cart(pt, eta, mag, z_);
-    t_ = (E==0.) ? mag : E;
+    t_ = (E<mag) ? mag : E;
   };
 
   // Return transverse component
@@ -83,8 +64,14 @@ typedef T xyzt_t;
     cart_to_polar(x_, y_, pt_out, phi_out);
   };
 
+  // Add two 4-vectors
+  ap_lorentz<T> operator+(ap_lorentz<T> rhs) {
+    return ap_lorentz(xyzt_t(x_+rhs.x_), xyzt_t(y_+rhs.y_), xyzt_t(z_+rhs.z_), xyzt_t(t_+rhs.t_));
+  };
+
+
 private:
-  // Guard bits = log(cordic iterations ~ input width)
+  // Guard bits = log_2(cordic iterations ~ input width)
   typedef BitWidth<xyzt_t::width> gwidth;
   // Number of coarse steps for given eta range
   typedef Power<2, eta_t::iwidth-1> maxEta;
@@ -204,42 +191,47 @@ private:
   };
 
   static void hyperb_to_cart(xyzt_t r_in, eta_t eta_in, xyzt_t& x_out, xyzt_t& y_out) {
-    #pragma HLS PIPELINE II=2
-    std::cout << "Starting cordic" << std::endl;
-    std::cout << "r_in: " << r_in << ", eta_in: " << eta_in << std::endl;
+    #pragma HLS PIPELINE II=1
+    #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_xexact_hyp complete dim=0
+    #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_yexact_hyp complete dim=0
+    #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_xcoarse_hyp complete dim=0
+    #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_ycoarse_hyp complete dim=0
+    // std::cout << "Starting cordic" << std::endl;
+    // std::cout << "r_in: " << r_in << ", eta_in: " << eta_in << std::endl;
 
-    cordic_r_t x = r_in;
-    cordic_r_t y = 0.;
-    cordic_eta_t eta = eta_in;
-    
-    std::cout << "  Iter 0, x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
+    bool eta_pos = eta_in > 0;
+    eta_t abseta = (eta_pos) ? eta_in : eta_t(-eta_in);
+    cordic_eta_t eta = abseta & ~eta_t(7.5);
+    ap_uint<4> ieta = abseta<<1;
+    // std::cout << "abseta: " << abseta << ", eta: " << eta << ", ieta: " << ieta << std::endl;
 
-    cordic_r_t xtmp, ytmp;
-    // Step 1: steps of atanh(0.5) to guarantee |eta|<0.5
-    for(size_t i=0; i<size_t(1.82*maxEta::Value)-1; ++i) {
-      xtmp = (eta>=0) ? x + (y>>1) : x - (y>>1);
-      ytmp = (eta>=0) ? y + (x>>1) : y - (x>>1);
-      eta = (eta>=0) ? eta-cordic_eta_t(ap_lorentz_cordic_angles_hyp[0]) : eta+cordic_eta_t(ap_lorentz_cordic_angles_hyp[0]);
-      x = xtmp;
-      y = ytmp;
-      std::cout << "  Step iter " << i << ", x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
+    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0.) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[mag_t::width-3-1][ieta]);
+    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0.) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[mag_t::width-3-1][ieta]);
+    if ( eta != 0. ) {
+      // std::cout << "  Scaled, x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
+
+      cordic_r_t xtmp, ytmp;
+      for(size_t i=0; i<mag_t::width-3; ++i) {
+        xtmp = (eta>=0) ? x + (y>>(i+2)) : x - (y>>(i+2));
+        ytmp = (eta>=0) ? y + (x>>(i+2)) : y - (x>>(i+2));
+        eta = (eta>=0) ? eta-cordic_eta_t(ap_lorentz_cordic_angles_hyp[i]) : eta+cordic_eta_t(ap_lorentz_cordic_angles_hyp[i]);
+        x = xtmp;
+        y = ytmp;
+        // std::cout << "  Iter " << i << ", x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
+      }
     }
-    // Step 2: binary search
-    for(size_t i=1; i<=mag_t::width-2; ++i) {
-      xtmp = (eta>=0) ? x + (y>>i) : x - (y>>i);
-      ytmp = (eta>=0) ? y + (x>>i) : y - (x>>i);
-      eta = (eta>=0) ? eta-cordic_eta_t(ap_lorentz_cordic_angles_hyp[i-1]) : eta+cordic_eta_t(ap_lorentz_cordic_angles_hyp[i-1]);
-      x = xtmp;
-      y = ytmp;
-      std::cout << "  Search iter " << i << ", x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
-    }
 
-    x_out = x * ap_ufixed<mag_t::width, 1>(ap_lorentz_cordic_scales_hyp[mag_t::width-2]);
-    y_out = y * ap_ufixed<mag_t::width, 1>(ap_lorentz_cordic_scales_hyp[mag_t::width-2]);
-    std::cout << "  Output x: " << x_out << ", y: " << y_out << std::endl;
+    x_out = x;
+    y_out = (eta_pos) ? xyzt_t(y) : xyzt_t(-y);
+    // std::cout << "  Output x: " << x_out << ", y: " << y_out << std::endl;
   };
 
   // TODO: eta = asinh(pz/pt)
+};
+
+template<typename T>
+std::ostream& operator<<(std::ostream& os, const ap_lorentz<T>& v) {
+  os << "ap_lorentz(x=" << v.x_ << ", y=" << v.y_ << ", z=" << v.z_ << ", t=" << v.t_ << ")";
 };
 
 #endif // AP_LORENTZ_H
