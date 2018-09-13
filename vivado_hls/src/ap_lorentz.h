@@ -91,7 +91,7 @@ private:
     cordic_r_t r_tmp = r_in * ap_ufixed<cordic_r_t::width, 0>(ap_lorentz_cordic_scales[mag_t::width-2-1]);
 
     // Coarse rotate
-    bool phi_pos = phi_in > 0.;
+    bool phi_pos = phi_in > 0;
     phi_t absphi_in = (phi_pos) ? phi_in : phi_t(-phi_in);
     if ( absphi_in <= phi_t(M_PI/4.) ) {
       // East quadrant
@@ -205,9 +205,9 @@ private:
     ap_uint<4> ieta = abseta<<1;
     // std::cout << "abseta: " << abseta << ", eta: " << eta << ", ieta: " << ieta << std::endl;
 
-    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0.) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[mag_t::width-3-1][ieta]);
-    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0.) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[mag_t::width-3-1][ieta]);
-    if ( eta != 0. ) {
+    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[mag_t::width-3-1][ieta]);
+    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[mag_t::width-3-1][ieta]);
+    if ( eta != 0 ) {
       // std::cout << "  Scaled, x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
 
       cordic_r_t xtmp, ytmp;
