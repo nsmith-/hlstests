@@ -192,6 +192,7 @@ private:
 
   static void hyperb_to_cart(xyzt_t r_in, eta_t eta_in, xyzt_t& x_out, xyzt_t& y_out) {
     #pragma HLS PIPELINE II=1
+    // Prevent from using BRAM for such tiny arrays
     #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_xexact_hyp complete dim=0
     #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_yexact_hyp complete dim=0
     #pragma HLS ARRAY_PARTITION variable=ap_lorentz_cordic_xcoarse_hyp complete dim=0
@@ -205,9 +206,13 @@ private:
     ap_uint<4> ieta = abseta<<1;
     // std::cout << "abseta: " << abseta << ", eta: " << eta << ", ieta: " << ieta << std::endl;
 
-    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[mag_t::width-3-1][ieta]);
-    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta==0) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[mag_t::width-3-1][ieta]);
-    if ( eta != 0 ) {
+    // sum(ap_lorentz_cordic_angles_hyp[1:]) = 0.2488, so the
+    // ap_lorentz_cordic_xexact_hyp[0]=0.2554 step away from 0 or 0.5 will
+    // never be corrected for.  This conditional keeps the numerical error low at i*0.5
+    bool eta_zero = eta == 0;
+    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta_zero) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[mag_t::width-3-1][ieta]);
+    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta_zero) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[mag_t::width-3-1][ieta]);
+    if ( not eta_zero ) {
       // std::cout << "  Scaled, x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
 
       cordic_r_t xtmp, ytmp;
