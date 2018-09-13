@@ -2,6 +2,9 @@
 #include <iostream>
 #include "hls_math.h"
 #include "hls_dsp.h"
+#include "ap_lorentz.hpp"
+
+typedef ap_lorentz<ap_fixed<BITD+1, BITD+1> > lorentz;
 
 void hls_demo(in_cartesian_t input, output_struct& output)
 {
@@ -10,13 +13,20 @@ void hls_demo(in_cartesian_t input, output_struct& output)
 
   to_polar_impl_cordic(input, output.cordic);
   to_polar_impl_hlsmath(input, output.hlsmath);
-  to_polar_impl_fapprox(input, output.fapprox);
+
+  lorentz p4(lorentz::xyzt_t(output.cordic.r), lorentz::eta_t(0.2), lorentz::phi_t(output.cordic.phi), 0.);
+  lorentz::mag_t r;
+  lorentz::phi_t phi;
+  p4.pt_phi(r, phi);
+  output.lorentz.r = r;
+  output.lorentz.phi = phi;
 
 	return;
 }
 
 void to_polar_impl_cordic(in_cartesian_t input, out_polar_t& output) {
 #pragma HLS INLINE off
+#pragma HLS PIPELINE II=1
   assert( BITD<=17 );
 
   cordic_r_t x, y;
@@ -88,10 +98,3 @@ void to_polar_impl_hlsmath(in_cartesian_t input, out_polar_t& output) {
   output.phi = phi.phase;
 }
 
-void to_polar_impl_fapprox(in_cartesian_t input, out_polar_t& output) {
-#pragma HLS INLINE off
-  // TODO
-  int32_t x = input.x;
-  int32_t y = input.y;
-  output.r = hls::sqrt(x*x+y*y);
-}

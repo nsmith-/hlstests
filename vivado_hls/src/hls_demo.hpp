@@ -19,11 +19,10 @@ typedef struct {
 typedef struct {
   out_polar_t cordic;
   out_polar_t hlsmath;
-  out_polar_t fapprox;
+  out_polar_t lorentz;
 } output_struct;
 void to_polar_impl_cordic(in_cartesian_t input, out_polar_t& output);
 void to_polar_impl_hlsmath(in_cartesian_t input, out_polar_t& output);
-void to_polar_impl_fapprox(in_cartesian_t input, out_polar_t& output);
 
 void hls_demo(in_cartesian_t input, output_struct& output);
 

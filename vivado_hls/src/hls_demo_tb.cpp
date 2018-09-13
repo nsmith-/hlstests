@@ -28,9 +28,9 @@ int main(void)
     double r_hlsmath = static_cast<double>(output.hlsmath.r);
     double phi_hlsmath = static_cast<double>(output.hlsmath.phi);
     std::printf("  Out hlsmath: r=% 4.0f delta/LSB=% 3.1f,  phi=% 1.4f delta/LSB=% 3.1f\n", r_hlsmath, (r_hlsmath-r), phi_hlsmath, (phi_hlsmath-phi)/pow(2, -BITD+3));
-    // double r_fapprox = static_cast<double>(output.fapprox.r);
-    // double phi_fapprox = static_cast<double>(output.fapprox.phi);
-    // std::printf("  Out fapprox: r=% 4.0f delta/LSB=% 3.1f,  phi=% 1.4f delta/LSB=% 3.1f\n", r_fapprox, (r_fapprox-r)/pow(2, -BITD-1), phi_fapprox, (phi_fapprox-phi)/pow(2, -BITD+3));
+    double r_lorentz = static_cast<double>(output.lorentz.r);
+    double phi_lorentz = static_cast<double>(output.lorentz.phi);
+    std::printf("  Out lorentz: r=% 4.0f delta/LSB=% 3.1f,  phi=% 1.4f delta/LSB=% 3.1f\n", r_lorentz, (r_lorentz-r), phi_lorentz, (phi_lorentz-phi)/pow(2, -BITD+3));
   }
 
   std::printf("Test passed!\n");
