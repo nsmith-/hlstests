@@ -113,7 +113,6 @@ public:
 
   // Invariant mass
   xyzt_t mass() {
-    #pragma HLS INLINE off
     return sqrt(mass2());
   };
 
@@ -122,6 +121,23 @@ public:
     return ap_lorentz(xyzt_t(x_+rhs.x_), xyzt_t(y_+rhs.y_), xyzt_t(z_+rhs.z_), xyzt_t(t_+rhs.t_));
   };
 
+  // Optimized invariant mass calculation for sum of two massless candidates
+  // TODO: poor resolution due to bit width issues
+  //   Anyway this doesn't seem to be much faster
+  static mag2_t mass2_2cand(xyzt_t pt1, eta_t eta1, phi_t phi1, xyzt_t pt2, eta_t eta2, phi_t phi2) {
+    // M^2 = 2*pt1*pt2*(cosh(eta1-eta2)-cos(phi1-phi2))
+    mag2_t m2 = (pt1*pt2)<<1;
+    xyzt_t cosh_deta, junk1;
+    hyperb_to_cart(xyzt_t(1<<(xyzt_t::iwidth-11)), eta_t(eta1-eta2), cosh_deta, junk1);
+    xyzt_t cos_dphi, junk2;
+    polar_to_cart(xyzt_t(1<<(xyzt_t::iwidth-1)), dphi(phi1, phi2), cos_dphi, junk2);
+    return (m2*(cosh_deta-(cos_dphi>>10)))>>(xyzt_t::iwidth-11);
+  };
+
+  // In case one needs the actual value
+  static xyzt_t mass_2cand(xyzt_t pt1, eta_t eta1, phi_t phi1, xyzt_t pt2, eta_t eta2, phi_t phi2) {
+    return sqrt(mass2_2cand(pt2, eta1, phi1, pt2, eta2, phi2));
+  };
 
 // semi-private:
 
@@ -132,6 +148,16 @@ public:
   static const size_t cordic_iter_hyp = mag_t::width-2;
   typedef ap_fixed<cordic_iter+phi_t::iwidth+gwidth::Value, phi_t::iwidth> cordic_phi_t;
   typedef ap_fixed<cordic_iter_hyp+1+gwidth::Value, 1> cordic_eta_t;
+  typedef ap_fixed<phi_t::width+1, phi_t::iwidth+1> dphi_t;
+
+  // Unnecessary if phi_t is units of pi*1 rad
+  static phi_t dphi(phi_t a, phi_t b) {
+    dphi_t dp = a-b;
+    if ( dp >= dphi_t(M_PI) ) dp -= dphi_t(M_PI);
+    else if ( dp < dphi_t(-M_PI) ) dp -= dphi_t(-M_PI);
+    else dp -= 0;
+    return phi_t(dp);
+  };
 
   static void polar_to_cart(xyzt_t r_in, phi_t phi_in, xyzt_t& x_out, xyzt_t& y_out) {
     #pragma HLS PIPELINE II=1
