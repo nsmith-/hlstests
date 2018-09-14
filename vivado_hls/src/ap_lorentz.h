@@ -8,6 +8,9 @@
  * The bitwidth of the storage is templated, so make sure the
  * chosen ap_fixed type is sufficient, e.g. ap_fixed<12, 10> will
  * provide values up to 1024 with an LSB of 0.25.
+ *
+ * This file is self-contained, except for the tables in
+ * lorentz_tables.h, which will need to be in the include path.
  * 
  * - Nick Smith <nick.smith@cern.ch>
  */
@@ -16,10 +19,10 @@
 
 #include <ostream>
 #include "ap_fixed.h"
-// BitWidth and Power template classes
-#include "hls/utils/x_hls_utils.h"
-#include "lorentz_tables.h"
 #include "hls_dsp.h"
+#include "hls/utils/x_hls_utils.h"
+
+#include "lorentz_tables.h"
 
 
 // T must be ap_fixed type
