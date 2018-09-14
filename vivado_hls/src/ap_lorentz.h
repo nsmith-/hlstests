@@ -7,7 +7,7 @@
  *
  * The bitwidth of the storage is templated, so make sure the
  * chosen ap_fixed type is sufficient, e.g. ap_fixed<12, 10> will
- * provide values up to 1024 with an LSB of 0.25.
+ * provide values up to 512 with an LSB of 0.25.
  *
  * This file is self-contained, except for the tables in
  * lorentz_tables.h, which will need to be in the include path.
@@ -60,7 +60,7 @@ public:
   //    only 4 or 3 integer bits, respectively
   //    (i.e. -8 < eta <= 8, -4 < phi <= 4)
   //
-  //  * If E=0, it is set to |p| (i.e. assume M=0)
+  //  * If E < |p|, it is set to |p| (i.e. assume M=0)
   //
   //  * Warning: z_ and t_ can easily overlow if pt and |eta| are large
   //    Up to ceil(log2(cosh(8))) = 4 extra bits would be needed
@@ -106,7 +106,9 @@ public:
   // Invariant mass squared
   // This is cheaper than mass, so use it for a cut
   mag2_t mass2() {
-    return mag2_t(t_*t_-x_*x_-y_*y_-z_*z_);
+    mag2_t t2 = t_*t_;
+    mag2_t r2 = x_*x_ + y_*y_ + z_*z_;
+    return (t2 > r2) ? mag2_t(t2-r2) : mag2_t(0);
   };
 
   // Invariant mass
@@ -126,8 +128,10 @@ public:
   // Guard bits = log_2(cordic iterations ~ input width)
   typedef BitWidth<xyzt_t::width> gwidth;
   typedef ap_fixed<mag_t::width+gwidth::Value, mag_t::width> cordic_r_t;
-  typedef ap_fixed<phi_t::width+gwidth::Value, phi_t::iwidth> cordic_phi_t;
-  typedef ap_fixed<eta_t::width+gwidth::Value, eta_t::iwidth> cordic_eta_t;
+  static const size_t cordic_iter = mag_t::width-2;
+  static const size_t cordic_iter_hyp = mag_t::width-2;
+  typedef ap_fixed<cordic_iter+phi_t::iwidth+gwidth::Value, phi_t::iwidth> cordic_phi_t;
+  typedef ap_fixed<cordic_iter_hyp+1+gwidth::Value, 1> cordic_eta_t;
 
   static void polar_to_cart(xyzt_t r_in, phi_t phi_in, xyzt_t& x_out, xyzt_t& y_out) {
     #pragma HLS PIPELINE II=1
@@ -138,7 +142,7 @@ public:
     // std::cout << "r_in: " << r_in << ", phi_in: " << phi_in << std::endl;
 
     // pre-scale
-    cordic_r_t r_tmp = r_in * ap_ufixed<cordic_r_t::width, 0>(ap_lorentz_cordic_scales[mag_t::width-2-1]);
+    cordic_r_t r_tmp = r_in * ap_ufixed<cordic_r_t::width, 0>(ap_lorentz_cordic_scales[cordic_iter-1]);
 
     // Coarse rotate
     bool phi_pos = phi_in > 0;
@@ -173,7 +177,7 @@ public:
     // std::cout << "  Iter 0, x: " << x << ", y: " << y << ", phi: " << phi << std::endl;
 
     cordic_r_t xtmp, ytmp;
-    for(size_t i=1; i<=mag_t::width-2; ++i) {
+    for(size_t i=1; i<=cordic_iter; ++i) {
       xtmp = (phi>=0) ? x - (y>>i) : x + (y>>i);
       ytmp = (phi>=0) ? y + (x>>i) : y - (x>>i);
       phi = (phi>=0) ? phi-cordic_phi_t(ap_lorentz_cordic_angles[i-1]) : phi+cordic_phi_t(ap_lorentz_cordic_angles[i-1]);
@@ -226,7 +230,7 @@ public:
     // std::cout << "  Iter 0, x: " << x << ", y: " << y << ", phi: " << phi << std::endl;
 
     cordic_r_t xtmp, ytmp;
-    for(size_t i=1; i<=mag_t::width-2; ++i) {
+    for(size_t i=1; i<=cordic_iter; ++i) {
       xtmp = (y>=0) ? x + (y>>i) : x - (y>>i);
       ytmp = (y>=0) ? y - (x>>i) : y + (x>>i);
       phi = (y>=0) ? phi-cordic_phi_t(ap_lorentz_cordic_angles[i-1]) : phi+cordic_phi_t(ap_lorentz_cordic_angles[i-1]);
@@ -235,7 +239,7 @@ public:
       // std::cout << "  Iter " << i << ", x: " << x << ", y: " << y << ", phi: " << phi << std::endl;
     }
 
-    r_out = x * ap_ufixed<mag_t::width, 0>(ap_lorentz_cordic_scales[mag_t::width-2-1]);
+    r_out = x * ap_ufixed<mag_t::width, 0>(ap_lorentz_cordic_scales[cordic_iter-1]);
     phi_out = (phi > cordic_phi_t(M_PI)) ? cordic_phi_t(2*M_PI)-phi: -phi;
     // std::cout << "  Output r: " << r_out << ", phi: " << phi_out << std::endl;
   };
@@ -260,13 +264,13 @@ public:
     // ap_lorentz_cordic_xexact_hyp[0]=0.2554 step away from 0 or 0.5 will
     // never be corrected for.  This conditional keeps the numerical error low at i*0.5
     bool eta_zero = eta == 0;
-    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta_zero) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[mag_t::width-3-1][ieta]);
-    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta_zero) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[mag_t::width-3-1][ieta]);
+    cordic_r_t x = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta_zero) ? ap_lorentz_cordic_xexact_hyp[ieta] : ap_lorentz_cordic_xcoarse_hyp[cordic_iter_hyp-1][ieta]);
+    cordic_r_t y = r_in * ap_ufixed<cordic_r_t::width, 10>( (eta_zero) ? ap_lorentz_cordic_yexact_hyp[ieta] : ap_lorentz_cordic_ycoarse_hyp[cordic_iter_hyp-1][ieta]);
     if ( not eta_zero ) {
       // std::cout << "  Scaled, x: " << x << ", y: " << y << ", eta: " << eta << std::endl;
 
       cordic_r_t xtmp, ytmp;
-      for(size_t i=0; i<mag_t::width-3; ++i) {
+      for(size_t i=0; i<cordic_iter_hyp; ++i) {
         xtmp = (eta>=0) ? x + (y>>(i+2)) : x - (y>>(i+2));
         ytmp = (eta>=0) ? y + (x>>(i+2)) : y - (x>>(i+2));
         eta = (eta>=0) ? eta-cordic_eta_t(ap_lorentz_cordic_angles_hyp[i]) : eta+cordic_eta_t(ap_lorentz_cordic_angles_hyp[i]);
@@ -282,6 +286,7 @@ public:
   };
 
   static xyzt_t sqrt(mag2_t xsq_in) {
+    #pragma HLS PIPELINE II=1
     mag2_t x = 0;
     mag2_t xsq = xsq_in;
     mag2_t test = 0;

@@ -1,6 +1,6 @@
 #include "ap_lorentz.h"
 
-typedef ap_lorentz<ap_fixed<12, 10> > lorentz;
+typedef ap_lorentz<ap_fixed<14, 12> > lorentz;
 
 typedef struct {
   lorentz::xyzt_t pt;
