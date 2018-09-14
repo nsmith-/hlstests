@@ -1,3 +1,16 @@
+/*
+ * ap_lorentz: A class for Lorentz vectors in HLS
+ *
+ * Internal storage is cartesian representation, with methods
+ * to construct from both cartesian and polar/hyperbolic inputs
+ *   i.e. (x,y,z,t) or (pt,eta,phi,E)
+ *
+ * The bitwidth of the storage is templated, so make sure the
+ * chosen ap_fixed type is sufficient, e.g. ap_fixed<12, 10> will
+ * provide values up to 1024 with an LSB of 0.25.
+ * 
+ * - Nick Smith <nick.smith@cern.ch>
+ */
 #ifndef AP_LORENTZ_H
 #define AP_LORENTZ_H
 
@@ -6,6 +19,7 @@
 // BitWidth and Power template classes
 #include "hls/utils/x_hls_utils.h"
 #include "lorentz_tables.h"
+#include "hls_dsp.h"
 
 
 // T must be ap_fixed type
@@ -19,6 +33,10 @@ public:
   typedef ap_fixed<xyzt_t::width, 4> eta_t;
   // phi range: [-4, 4) (obviously |phi|<pi in reality)
   typedef ap_fixed<xyzt_t::width, 3> phi_t;
+  // Squared quantities can be quite large
+  typedef ap_ufixed<xyzt_t::width*2-1, xyzt_t::iwidth*2-1> mag2_t;
+  // TODO: allow also scaled eta/phi (units of pi*1 rad)
+  // This would make delta-phi a trivial subtraction
 
   xyzt_t x_, y_, z_, t_;
 
@@ -50,8 +68,8 @@ public:
     t_ = (E<mag) ? mag : E;
   };
 
-  // Return transverse component
-  // i.e. p_T or rho
+  // Return transverse component, i.e. p_T or rho
+  // If you want phi also, use pt_phi instead
   mag_t pt() {
     mag_t pt_out;
     phi_t _drop;
@@ -64,17 +82,46 @@ public:
     cart_to_polar(x_, y_, pt_out, phi_out);
   };
 
+  // Return pseudorapidity
+  // If you want pT as well, use pt_eta_phi
+  eta_t eta() {
+    // TODO
+    return eta_t(0.);
+  };
+
+  // Calculate polar/hyperbolic coordinates
+  void pt_eta_phi(mag_t& pt_out, eta_t& eta_out, phi_t& phi_out) {
+    pt_phi(pt_out, phi_out);
+    // TODO: eta = asinh(pz/pt)
+  };
+
+  // Rapidity
+  eta_t rapidity() {
+    // TODO: rapidity = atanh(pz/E)
+  };
+
+  // Invariant mass squared
+  // This is cheaper than mass, so use it for a cut
+  mag2_t mass2() {
+    return mag2_t(t_*t_-x_*x_-y_*y_-z_*z_);
+  };
+
+  // Invariant mass
+  xyzt_t mass() {
+    #pragma HLS INLINE off
+    return sqrt(mass2());
+  };
+
   // Add two 4-vectors
   ap_lorentz<T> operator+(ap_lorentz<T> rhs) {
     return ap_lorentz(xyzt_t(x_+rhs.x_), xyzt_t(y_+rhs.y_), xyzt_t(z_+rhs.z_), xyzt_t(t_+rhs.t_));
   };
 
 
-private:
+// semi-private:
+
   // Guard bits = log_2(cordic iterations ~ input width)
   typedef BitWidth<xyzt_t::width> gwidth;
-  // Number of coarse steps for given eta range
-  typedef Power<2, eta_t::iwidth-1> maxEta;
   typedef ap_fixed<mag_t::width+gwidth::Value, mag_t::width> cordic_r_t;
   typedef ap_fixed<phi_t::width+gwidth::Value, phi_t::iwidth> cordic_phi_t;
   typedef ap_fixed<eta_t::width+gwidth::Value, eta_t::iwidth> cordic_eta_t;
@@ -231,7 +278,37 @@ private:
     // std::cout << "  Output x: " << x_out << ", y: " << y_out << std::endl;
   };
 
-  // TODO: eta = asinh(pz/pt)
+  static xyzt_t sqrt(mag2_t xsq_in) {
+    mag2_t x = 0;
+    mag2_t xsq = xsq_in;
+    mag2_t test = 0;
+    test[mag2_t::width-1] = 1;
+    // std::cout << "xsq: " << xsq << ", x: " << x << ", test: " << test << std::endl;
+    for(size_t i=0; i<xyzt_t::iwidth; ++i) {
+      bool gt = xsq >= (test+x);
+      xsq = (gt) ? mag2_t(xsq - (test+x)) : xsq;
+      x = (gt) ? mag2_t((x>>1) + test) : (x>>1);
+      test = test >> 2;
+      // std::cout << "xsq: " << xsq << ", x: " << x << ", test: " << test << std::endl;
+    }
+    test <<= 1;
+    for(size_t i=0; i<xyzt_t::width-xyzt_t::iwidth; ++i) {
+      bool gt = xsq >= (test+(x>>i));
+      xsq = (gt) ? mag2_t(xsq - (test+(x>>i))) : xsq;
+      x = (gt) ? mag2_t(x + test) : x;
+      test = test >> 1;
+      // std::cout << "*xsq: " << xsq << ", x: " << x << ", test: " << test << std::endl;
+    }
+    return xyzt_t(x);
+  };
+
+  static xyzt_t hls_sqrt(mag2_t xsq_in) {
+    typename hls::sqrt_input<mag2_t::width, hls::CORDIC_FORMAT_USIG_INT>::in r2;
+    r2.in = xsq_in;
+    typename hls::sqrt_output<xyzt_t::width, hls::CORDIC_FORMAT_USIG_INT>::out r;
+    hls::sqrt<hls::CORDIC_FORMAT_USIG_INT, mag2_t::width, xyzt_t::width, hls::CORDIC_ROUND_TRUNCATE>(r2, r);
+    return r.out;
+  };
 };
 
 template<typename T>
