@@ -18,11 +18,11 @@ int main(void)
   csv << "d_px,d_py,d_pz,d_E,d_M" << std::endl;
   
   for(size_t i=0; i<1000; ++i) {
-    input[0].pt  = lorentz::xyzt_t(std::rand()*200./RAND_MAX);
+    input[0].pt  = lorentz::xyzt_t(std::rand()*190./RAND_MAX+10.);
     input[0].eta = lorentz::eta_t(std::rand()*6./RAND_MAX-3.);
     input[0].phi = lorentz::phi_t(M_PI*std::rand()*1.98/RAND_MAX-M_PI);
 
-    input[1].pt  = lorentz::xyzt_t(std::rand()*200./RAND_MAX);
+    input[1].pt  = lorentz::xyzt_t(std::rand()*190./RAND_MAX+10.);
     input[1].eta = lorentz::eta_t(std::rand()*4./RAND_MAX-2.);
     input[1].phi = lorentz::phi_t(M_PI*std::rand()*1.98/RAND_MAX-M_PI);
 

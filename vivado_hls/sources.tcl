@@ -1,8 +1,10 @@
-## Set the top level module
-set_top hls_demo
-#
-### Add source code
-add_files ${PROJ_DIR}/src/hls_demo.cpp
+set TOP cand_perm_mass
 
-## Add testbed files
-add_files -tb ${PROJ_DIR}/src/hls_demo_tb.cpp -cflags ${CFLAGS}
+# Set the top level module
+set_top ${TOP}
+
+# Add source code
+add_files ${PROJ_DIR}/src/${TOP}.cpp
+
+# Add testbed files
+add_files -tb ${PROJ_DIR}/src/${TOP}_tb.cpp -cflags ${CFLAGS}
