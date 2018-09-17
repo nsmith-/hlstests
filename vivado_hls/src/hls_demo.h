@@ -8,4 +8,4 @@ typedef struct {
   lorentz::phi_t phi;
 } cand_in;
 
-void hls_demo(cand_in input[2], lorentz& output, lorentz::xyzt_t& m);
+void hls_demo(cand_in input[2], lorentz& output, lorentz::mag2_t& m2);

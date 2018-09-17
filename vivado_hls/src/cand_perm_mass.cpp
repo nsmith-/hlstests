@@ -16,7 +16,7 @@ void cand_perm_mass(cand_in input[n_cands], lorentz::xyzt_t mass_out[n_perm])
       for(size_t k=j+1; k<n_cands; ++k) {
         lorentz cand_k = lorentz(input[k].pt, input[k].eta, input[k].phi, 0.);
         lorentz cand_ijk = cand_ij + cand_k;
-        mass_out[im++] = cand_ijk.mass();
+        mass_out[im++] = cand_ijk.mass2();
       }
     }
   }

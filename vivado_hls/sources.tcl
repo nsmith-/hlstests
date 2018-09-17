@@ -1,4 +1,4 @@
-set TOP cand_perm_mass
+set TOP hls_demo
 
 # Set the top level module
 set_top ${TOP}

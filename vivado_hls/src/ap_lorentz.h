@@ -126,17 +126,39 @@ public:
   //   Anyway this doesn't seem to be much faster
   static mag2_t mass2_2cand(xyzt_t pt1, eta_t eta1, phi_t phi1, xyzt_t pt2, eta_t eta2, phi_t phi2) {
     // M^2 = 2*pt1*pt2*(cosh(eta1-eta2)-cos(phi1-phi2))
-    mag2_t m2 = (pt1*pt2)<<1;
+    xyzt_t r = (pt1 < pt2) ? pt2 : pt1;
+    xyzt_t p = (pt1 < pt2) ? pt1 : pt2;
     xyzt_t cosh_deta, junk1;
-    hyperb_to_cart(xyzt_t(1<<(xyzt_t::iwidth-11)), eta_t(eta1-eta2), cosh_deta, junk1);
+    hyperb_to_cart(r, eta_t(eta1-eta2), cosh_deta, junk1);
     xyzt_t cos_dphi, junk2;
-    polar_to_cart(xyzt_t(1<<(xyzt_t::iwidth-1)), dphi(phi1, phi2), cos_dphi, junk2);
-    return (m2*(cosh_deta-(cos_dphi>>10)))>>(xyzt_t::iwidth-11);
+    polar_to_cart(r, dphi(phi1, phi2), cos_dphi, junk2);
+    return ((cosh_deta-cos_dphi)*p)<<1;
   };
 
   // In case one needs the actual value
   static xyzt_t mass_2cand(xyzt_t pt1, eta_t eta1, phi_t phi1, xyzt_t pt2, eta_t eta2, phi_t phi2) {
     return sqrt(mass2_2cand(pt2, eta1, phi1, pt2, eta2, phi2));
+  };
+
+  // Optimized invariant mass calculation for sum of two boosted massless candidates, i.e. dR < 1.5
+  static mag2_t mass2_boosted2cand(xyzt_t pt1, eta_t eta1, phi_t phi1, xyzt_t pt2, eta_t eta2, phi_t phi2) {
+    #pragma HLS INLINE off
+    #pragma HLS PIPELINE II=1
+    // M^2 = 2*pt1*pt2*(cosh(eta1-eta2)-cos(phi1-phi2))
+    mag2_t m2 = (pt1*pt2)<<1;
+    // If deltas < 2, they can fit in phi_t
+    phi_t deta2 = (eta1-eta2)*(eta1-eta2);
+    // Horner's method of 6-th order expansion of cosh(x)-1
+    const phi_t p0 = phi_t(1./720);
+    phi_t p1 = p0*deta2 + phi_t(1./24);
+    phi_t p2 = p1*deta2 + phi_t(1./2);
+    phi_t p3 = p2*deta2;
+    // Horner's method of 6-th order expansion of 1-cos(x)
+    phi_t dphi2 = dphi(phi1, phi2)*dphi(phi1, phi2);
+    phi_t q1 = p0*dphi2 - phi_t(1./24);
+    phi_t q2 = q1*dphi2 + phi_t(1./2);
+    phi_t q3 = q2*dphi2;
+    return m2*(p3+q3);
   };
 
 // semi-private:
