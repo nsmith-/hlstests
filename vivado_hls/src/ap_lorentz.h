@@ -140,25 +140,30 @@ public:
     return sqrt(mass2_2cand(pt2, eta1, phi1, pt2, eta2, phi2));
   };
 
-  // Optimized invariant mass calculation for sum of two boosted massless candidates, i.e. dR < 1.5
+  // Optimized invariant mass calculation for sum of two boosted massless candidates
+  // Restrictions: max(|dEta|,|dPhi|) < 1.96, max(pt1,pt2) < 362
+  // LSB-accurate to max(|dEta|,|dPhi|) < ~1.4
   static mag2_t mass2_boosted2cand(xyzt_t pt1, eta_t eta1, phi_t phi1, xyzt_t pt2, eta_t eta2, phi_t phi2) {
     #pragma HLS INLINE off
     #pragma HLS PIPELINE II=1
     // M^2 = 2*pt1*pt2*(cosh(eta1-eta2)-cos(phi1-phi2))
-    mag2_t m2 = (pt1*pt2)<<1;
-    // If deltas < 2, they can fit in phi_t
-    phi_t deta2 = (eta1-eta2)*(eta1-eta2);
+    ap_ufixed<24, 18> m2 = (pt1*pt2)<<1;
+    // If deltas < 2, they can fit in this
+    ap_ufixed<24,2> deta2 = (eta1-eta2)*(eta1-eta2);
+    ap_ufixed<24,2> dphi2 = dphi(phi1, phi2)*dphi(phi1, phi2);
     // Horner's method of 6-th order expansion of cosh(x)-1
-    const phi_t p0 = phi_t(1./720);
-    phi_t p1 = p0*deta2 + phi_t(1./24);
-    phi_t p2 = p1*deta2 + phi_t(1./2);
-    phi_t p3 = p2*deta2;
+    const ap_ufixed<18,0> p0 = (1./720);
+    ap_ufixed<18,0> p1 = p0*deta2 + ap_ufixed<18,0>(1./24);
+    ap_ufixed<18,0> p2 = p1*deta2 + ap_ufixed<18,0>(1./2);
+    ap_ufixed<18,2> p3 = p2*deta2;
     // Horner's method of 6-th order expansion of 1-cos(x)
-    phi_t dphi2 = dphi(phi1, phi2)*dphi(phi1, phi2);
-    phi_t q1 = p0*dphi2 - phi_t(1./24);
-    phi_t q2 = q1*dphi2 + phi_t(1./2);
-    phi_t q3 = q2*dphi2;
-    return m2*(p3+q3);
+    ap_ufixed<18,0> q1 = p0*dphi2 - ap_ufixed<18,0>(1./24);
+    ap_ufixed<18,0> q2 = q1*dphi2 + ap_ufixed<18,0>(1./2);
+    ap_ufixed<18,2> q3 = q2*dphi2;
+    // cosh(x)-cos(x)<4 => x<1.96
+    mag2_t out = m2*ap_ufixed<18,2>(p3+q3);
+    if ( debug_ ) std::cout << "m2 method: " << m2 << ", " << deta2 << ", " << dphi2 << ", " << p3 << ", " << q3 << ", " << out << std::endl;
+    return out;
   };
 
 // semi-private:
@@ -171,12 +176,13 @@ public:
   typedef ap_fixed<cordic_iter+phi_t::iwidth+gwidth::Value, phi_t::iwidth> cordic_phi_t;
   typedef ap_fixed<cordic_iter_hyp+1+gwidth::Value, 1> cordic_eta_t;
   typedef ap_fixed<phi_t::width+1, phi_t::iwidth+1> dphi_t;
+  static bool debug_;
 
   // Unnecessary if phi_t is units of pi*1 rad
   static phi_t dphi(phi_t a, phi_t b) {
     dphi_t dp = a-b;
-    if ( dp >= dphi_t(M_PI) ) dp -= dphi_t(M_PI);
-    else if ( dp < dphi_t(-M_PI) ) dp -= dphi_t(-M_PI);
+    if ( dp >= dphi_t(M_PI) ) dp -= dphi_t(2*M_PI);
+    else if ( dp < dphi_t(-M_PI) ) dp -= dphi_t(-2*M_PI);
     else dp -= 0;
     return phi_t(dp);
   };
@@ -371,5 +377,8 @@ template<typename T>
 std::ostream& operator<<(std::ostream& os, const ap_lorentz<T>& v) {
   os << "ap_lorentz(x=" << v.x_ << ", y=" << v.y_ << ", z=" << v.z_ << ", t=" << v.t_ << ")";
 };
+
+template<typename T>
+bool ap_lorentz<T>::debug_ = false;
 
 #endif // AP_LORENTZ_H
